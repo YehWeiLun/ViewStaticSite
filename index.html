@@ -23,16 +23,16 @@
     .legend span::before { content:""; display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:3px; background:var(--blue); }
     .legend .lab::before { background:var(--pink); }
     .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 12px 35px #27345b12; }
-    table { width:100%; min-width:1320px; border-spacing:0; table-layout:fixed; }
-    th,td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); vertical-align:top; }
-    th:last-child,td:last-child { border-right:0; }
-    tbody tr:last-child td { border-bottom:0; }
-    thead th { position:sticky; top:0; z-index:3; padding:14px 8px; color:#fff; background:#282153; font-size:.9rem; }
-    thead th:first-child { left:0; z-index:4; width:105px; }
-    td { height:126px; padding:7px; background:#fff; }
-    td.time { position:sticky; left:0; z-index:2; padding:18px 8px; color:#4b3cb0; background:#f8f7ff; text-align:center; font-weight:900; }
-    td.empty { background:linear-gradient(135deg,#fff 25%,#fafbfe 25%,#fafbfe 50%,#fff 50%,#fff 75%,#fafbfe 75%); background-size:16px 16px; }
-    .card { display:block; min-height:108px; height:100%; border-left:5px solid var(--blue); border-radius:9px; padding:10px; color:inherit; background:#edf7fd; text-decoration:none; transition:.15s ease; }
+    .room-grid,.timeline { display:grid; width:100%; min-width:1320px; grid-template-columns:105px repeat(8,minmax(150px,1fr)); }
+    .room-grid { position:sticky; top:0; z-index:10; color:#fff; background:#282153; }
+    .room-grid > div { min-height:58px; display:flex; align-items:center; justify-content:center; padding:10px 8px; border-right:1px solid #ffffff2b; text-align:center; font-size:.9rem; font-weight:800; }
+    .room-grid > div:last-child { border-right:0; }
+    .timeline { position:relative; grid-template-rows:repeat(90,10px); background:repeating-linear-gradient(to bottom,#fff 0,#fff 29px,#edf1f6 29px,#edf1f6 30px); }
+    .room-lane { z-index:0; border-right:1px solid var(--line); background:linear-gradient(135deg,#fff0 25%,#fafbfe88 25%,#fafbfe88 50%,#fff0 50%,#fff0 75%,#fafbfe88 75%); background-size:16px 16px; pointer-events:none; }
+    .time-label { z-index:3; align-self:start; padding:3px 8px 0; color:#4b3cb0; background:#f8f7ff; border-right:1px solid var(--line); transform:translateY(-1px); text-align:center; font-size:.77rem; font-weight:900; }
+    .time-label.last { align-self:end; transform:translateY(100%); }
+    .hour-line { z-index:1; border-top:1px solid var(--line); pointer-events:none; }
+    .card { z-index:2; display:block; min-height:0; overflow:hidden; margin:2px 4px; border-left:5px solid var(--blue); border-radius:9px; padding:8px; color:inherit; background:#edf7fd; text-decoration:none; transition:.15s ease; }
     .card:hover { transform:translateY(-2px); box-shadow:0 6px 16px #1e5a7b24; }
     .card.lab { border-color:var(--pink); background:#fff0f4; }
     .meta { display:flex; justify-content:space-between; gap:5px; margin-bottom:7px; color:var(--blue); font-size:.72rem; font-weight:900; }
@@ -42,14 +42,14 @@
     .notice { display:none; padding:38px; text-align:center; color:var(--muted); }
     .source { margin:12px 4px 0; color:var(--muted); font-size:.78rem; }
     .source a { color:#4b3cb0; }
-    @media print { header { padding:18px 24px; } main { padding:14px 0; } .toolbar input,.legend,.source { display:none; } .table-wrap { overflow:visible; box-shadow:none; } table { min-width:0; font-size:8px; } thead th:first-child { width:55px; } td { height:92px; padding:3px; } .card { min-height:82px; padding:5px; } }
+    @media print { header { padding:18px 24px; } main { padding:14px 0; } .toolbar input,.legend,.source { display:none; } .table-wrap { overflow:visible; box-shadow:none; } .room-grid,.timeline { min-width:0; grid-template-columns:55px repeat(8,1fr); } .timeline { grid-template-rows:repeat(90,7px); } .room-grid > div { font-size:7px; } .card { margin:1px; padding:3px; } .title { font-size:7px; } .speaker,.meta { font-size:6px; } }
   </style>
 </head>
 <body>
   <header>
     <p>HELLO WORLD DEV CONFERENCE 2026</p>
     <h1>議程課表</h1>
-    <div class="sub">X 軸為教室 · Y 軸為開始時間</div>
+    <div class="sub">X 軸為教室 · Y 軸為連續時間</div>
   </header>
   <main>
     <div class="toolbar">
@@ -61,10 +61,8 @@
     </div>
     <div class="legend"><span>分堂議程／主題演講</span><span class="lab">工作坊</span></div>
     <div class="table-wrap">
-      <table>
-        <thead><tr id="rooms"><th>時間</th></tr></thead>
-        <tbody id="schedule"></tbody>
-      </table>
+      <div class="room-grid" id="rooms"></div>
+      <div class="timeline" id="schedule"></div>
       <div class="notice" id="notice">找不到符合條件的議程</div>
     </div>
     <p class="source">資料依據：本機儲存的官方議程 HTML 與 <a href="https://hwdc.ithome.com.tw/2026/agenda" target="_blank" rel="noopener">Hello World Dev Conference 2026 官方議程</a>。資料擷取日期：2026/09/17。</p>
@@ -145,21 +143,31 @@
     });
     let selectedDate = '10/14';
     const escapeHtml = value => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const dayStart = 10 * 60;
+    const dayEnd = 17 * 60 + 30;
+    const toMinutes = time => { const [hour,minute] = time.split(':').map(Number); return hour * 60 + minute; };
+    const rowAt = time => Math.floor((toMinutes(time) - dayStart) / 5) + 1;
+    const formatTime = minutes => `${String(Math.floor(minutes / 60)).padStart(2,'0')}:${String(minutes % 60).padStart(2,'0')}`;
     function render() {
       const query = document.querySelector('#search').value.trim().toLocaleLowerCase('zh-Hant-TW');
       const filtered = data.filter(x => x.date === selectedDate && `${x.title} ${x.speaker} ${x.room}`.toLocaleLowerCase('zh-Hant-TW').includes(query));
-      const times = [...new Set(data.filter(x => x.date === selectedDate).map(x => x.start))].sort();
-      document.querySelector('#rooms').innerHTML = '<th>時間</th>' + rooms.map(r => `<th>${r.replace(' 會議室','<br>會議室')}</th>`).join('');
-      document.querySelector('#schedule').innerHTML = times.map(time => {
-        const cells = rooms.map(room => {
-          const item = filtered.find(x => x.start === time && x.room === room);
-          if (!item) return '<td class="empty"></td>';
-          const kind = item.type === 'lab' ? '工作坊' : (item.title === 'Welcome opening' ? '開場' : (item.room === 'ABCDEF 會議室' ? '主題演講' : '分堂議程'));
-          const path = item.type === 'lab' ? 'lab' : 'session';
-          return `<td><a class="card ${item.type}" href="https://hwdc.ithome.com.tw/2026/${path}/${item.id}" target="_blank" rel="noopener"><div class="meta"><span>${item.start}–${item.end}</span><span>${kind}</span></div><div class="title">${escapeHtml(item.title)}</div>${item.speaker ? `<div class="speaker">${escapeHtml(item.speaker)}</div>` : ''}</a></td>`;
-        }).join('');
-        return `<tr><td class="time">${time}</td>${cells}</tr>`;
+      document.querySelector('#rooms').innerHTML = '<div>時間</div>' + rooms.map(r => `<div>${r.replace(' 會議室','<br>會議室')}</div>`).join('');
+      const lanes = rooms.map((_,i) => `<div class="room-lane" style="grid-column:${i+2};grid-row:1/-1"></div>`).join('');
+      const marks = [];
+      for (let minute = dayStart; minute <= dayEnd; minute += 15) {
+        const row = Math.min(91, Math.floor((minute - dayStart) / 5) + 1);
+        marks.push(`<div class="hour-line" style="grid-column:1/-1;grid-row:${row}"></div>`);
+        marks.push(`<div class="time-label${minute === dayEnd ? ' last' : ''}" style="grid-column:1;grid-row:${Math.min(row,90)}">${formatTime(minute)}</div>`);
+      }
+      const cards = filtered.map(item => {
+        const kind = item.type === 'lab' ? '工作坊' : (item.title === 'Welcome opening' ? '開場' : (item.room === 'ABCDEF 會議室' ? '主題演講' : '分堂議程'));
+        const path = item.type === 'lab' ? 'lab' : 'session';
+        const startRow = rowAt(item.start);
+        const durationRows = Math.max(1, Math.round((toMinutes(item.end) - toMinutes(item.start)) / 5));
+        const column = rooms.indexOf(item.room) + 2;
+        return `<a class="card ${item.type}" style="grid-column:${column};grid-row:${startRow}/span ${durationRows}" href="https://hwdc.ithome.com.tw/2026/${path}/${item.id}" target="_blank" rel="noopener"><div class="meta"><span>${item.start}–${item.end}</span><span>${kind}</span></div><div class="title">${escapeHtml(item.title)}</div>${item.speaker ? `<div class="speaker">${escapeHtml(item.speaker)}</div>` : ''}</a>`;
       }).join('');
+      document.querySelector('#schedule').innerHTML = lanes + marks.join('') + cards;
       document.querySelector('#notice').style.display = filtered.length ? 'none' : 'block';
     }
     document.querySelectorAll('[data-date]').forEach(button => button.addEventListener('click', () => {
